@@ -1,0 +1,5 @@
+out/
+dist-opendesign-runtime/
+*.tar.gz
+node_modules/
+open-design/

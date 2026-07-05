@@ -1,0 +1,73 @@
+name: build-release
+
+# Builds per-platform self-contained open-design runtime bundles and publishes them as a Release.
+# Manual dispatch: pick which open-design tag to wrap. Recipe proven for darwin/linux; win32 pending
+# (producer needs .zip node extraction — see build-opendesign-runtime.mjs head note).
+on:
+  workflow_dispatch:
+    inputs:
+      od_tag:
+        description: "open-design git tag to wrap (e.g. open-design-v0.13.0)"
+        required: true
+        default: open-design-v0.13.0
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-13, platform: darwin, arch: x64 }
+          - { os: macos-14, platform: darwin, arch: arm64 }
+          - { os: ubuntu-latest, platform: linux, arch: x64 }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # create/upload releases
+    steps:
+      - name: Checkout producer (this repo)
+        uses: actions/checkout@v4
+
+      - name: Checkout open-design @ ${{ inputs.od_tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: nexu-io/open-design
+          ref: ${{ inputs.od_tag }}
+          path: open-design
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Enable pnpm 10.33.2
+        run: corepack enable && corepack prepare pnpm@10.33.2 --activate
+
+      - name: Install open-design deps
+        working-directory: open-design
+        run: pnpm install
+
+      - name: Build web static export (apps/web/out)
+        working-directory: open-design
+        run: pnpm --filter @open-design/web build
+
+      - name: Build runtime bundle
+        run: node build-opendesign-runtime.mjs --repo open-design --out out --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+
+      - name: Derive version + tar
+        id: pack
+        shell: bash
+        run: |
+          VER=$(node -p "require('./out/manifest.json').version")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=od-runtime-v$VER" >> "$GITHUB_OUTPUT"
+          tar -czf "opendesign-runtime-$VER-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" -C out .
+
+      - name: Publish to release (create-or-upload, matrix-safe)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="${{ steps.pack.outputs.tag }}"
+          # create the release if it doesn't exist yet (races across matrix jobs → ignore "already exists")
+          gh release create "$TAG" --title "$TAG" --notes "Self-contained headless open-design runtime (wraps ${{ inputs.od_tag }})." || true
+          gh release upload "$TAG" opendesign-runtime-*.tar.gz --clobber
