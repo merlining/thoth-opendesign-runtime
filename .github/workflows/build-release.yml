@@ -17,9 +17,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-13, platform: darwin, arch: x64 }
-          - { os: macos-14, platform: darwin, arch: arm64 }
-          - { os: ubuntu-latest, platform: linux, arch: x64 }
+          # darwin-x64 在 arm64 的 macos-14 runner 上经 Rosetta 用 x64 node 构建 —— Intel(macos-13)runner
+          # 已退役/极紧缺,长期排队。x64 node 下 process.arch=x64,原生模块(better-sqlite3/node-pty)按 x64
+          # prebuilt 拉取,产出即 darwin-x64。
+          - { os: macos-14, platform: darwin, arch: x64, node_arch: x64 }
+          - { os: macos-14, platform: darwin, arch: arm64, node_arch: arm64 }
+          - { os: ubuntu-latest, platform: linux, arch: x64, node_arch: x64 }
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write # create/upload releases
@@ -34,10 +37,11 @@ jobs:
           ref: ${{ inputs.od_tag }}
           path: open-design
 
-      - name: Setup Node 24
+      - name: Setup Node 24 (${{ matrix.node_arch }})
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+          architecture: ${{ matrix.node_arch }}
 
       - name: Enable pnpm 10.33.2
         run: corepack enable && corepack prepare pnpm@10.33.2 --activate
