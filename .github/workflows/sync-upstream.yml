@@ -1,0 +1,36 @@
+name: sync-upstream
+
+# 自动同步出包:定时(默认每 6h)对比官方 open-design 最新 release 与本仓已发的 od-runtime 版本;
+# 官方领先 → 自动 dispatch build-release 出该版本的全平台包。开启后「他们发版 → 本仓自动出包 → thoth
+# 自动看到可升级」全链无人。也可手动 dispatch。
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # 触发 build-release.yml
+      contents: read
+    steps:
+      - name: Compare upstream vs runtime, dispatch build if behind
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          UP_TAG=$(gh api repos/nexu-io/open-design/releases/latest --jq .tag_name)   # open-design-vX.Y.Z
+          UPV=${UP_TAG#open-design-v}
+          RT_TAG=$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name 2>/dev/null || echo "")
+          RTV=${RT_TAG#od-runtime-v}
+          echo "upstream=$UPV  runtime=${RTV:-<none>}"
+          HIGH=$(printf '%s\n%s\n' "$UPV" "${RTV:-0.0.0}" | sort -V | tail -1)
+          if [ -z "$RTV" ] || { [ "$HIGH" = "$UPV" ] && [ "$UPV" != "$RTV" ]; }; then
+            echo "runtime behind → dispatch build-release for $UP_TAG"
+            gh workflow run build-release.yml -f od_tag="$UP_TAG"
+          else
+            echo "runtime up to date — nothing to do"
+          fi
+          # gotcha: 若 GITHUB_TOKEN 触发的 workflow_dispatch 不生效(某些账号/组织策略),换一个 repo PAT
+          # (secrets.DISPATCH_PAT)替 GH_TOKEN 即可。

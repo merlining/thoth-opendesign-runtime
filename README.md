@@ -56,6 +56,10 @@ Requires **Node 24** + **corepack pnpm@10.33.2** (open-design pins these). `--re
 
 `.github/workflows/build-release.yml` runs the matrix on GitHub-hosted runners and publishes the release.
 
+`.github/workflows/sync-upstream.yml` runs on a schedule (every 6h): when open-design publishes a newer
+official release than this repo's latest bundle, it auto-dispatches `build-release` for that tag — so the
+runtime tracks upstream hands-off (upstream release → auto-build → thoth sees the update).
+
 ## License / attribution
 
 This repo's build scripts: MIT. The **bundles** redistribute:
