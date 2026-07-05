@@ -39,6 +39,9 @@ const PLATFORM = arg('platform', process.platform) // darwin | linux | win32
 const ARCH = arg('arch', process.arch) // x64 | arm64
 const OD_REPO = resolve(arg('repo', join(repoRoot, 'node_modules', 'open-design')))
 const OUT = resolve(arg('out', join(repoRoot, 'dist-opendesign-runtime', `${PLATFORM}-${ARCH}`)))
+// 官方 release 版本(如 0.13.0,CI 从 od_tag 传入)。空 → 回退 daemon package.json 版本。**用 release 版本更对**:
+// monorepo 里 daemon 包版本(如 0.12.1)≠ 官方发布版本(0.13.0),用户认的是 release 版本,upstream 比对也据此。
+const RELEASE_VERSION = arg('version', '')
 
 function run(bin, args, opts = {}) {
   return execFileSync(bin, args, { stdio: 'inherit', ...opts })
@@ -104,7 +107,7 @@ function embedNode() {
 function writeManifest() {
   const pkg = JSON.parse(readFileSync(join(OUT, 'apps', 'daemon', 'package.json'), 'utf8'))
   const manifest = {
-    version: pkg.version, // = open-design daemon 版本(0.11.1),对齐 opendesign.checkUpdate 的 tag 比对
+    version: RELEASE_VERSION || pkg.version, // 官方 release 版本优先(CI 传);缺 → daemon 包版本。对齐 checkUpdate tag 比对
     platform: PLATFORM,
     arch: ARCH,
     node: NODE_VERSION,

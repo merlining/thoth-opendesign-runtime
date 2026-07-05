@@ -51,7 +51,9 @@ jobs:
         run: pnpm --filter @open-design/web build
 
       - name: Build runtime bundle
-        run: node build-opendesign-runtime.mjs --repo open-design --out out --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+        run: |
+          VER="${{ inputs.od_tag }}"; VER="${VER#open-design-v}"
+          node build-opendesign-runtime.mjs --repo open-design --out out --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --version "$VER"
 
       - name: Derive version + tar
         id: pack
